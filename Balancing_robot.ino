@@ -6,6 +6,10 @@
 #include "eeprom_utils.h"
 #include "parameters.h"
 
+#define BALANCING  0
+#define MOVE  1
+#define ROTATION  2
+
 int reset_count = 0;
 //#define CALIBRATION_MODE // For the first time
 
@@ -16,15 +20,24 @@ TB6612 motorB(BPWM, BIN1, BIN2);  //create a motor instance
 
 rPID  pidA(0.045, 0.10, 0., 255);     // kp, ki, kd,imax
 rPID  pidB(0.045, 0.10, 0,  255);     // kp, ki, kd,imax
-rPID  bala(130, 2035,7.5,4800);     // 1차 성공 200, 2040,5,5000 840 ok bala(130, 2035,7,4800);
-rPID  movePID(0.025,0.001, 4);
-rPID  yawPID(130, 2040, 5, 5000);
+rPID  static_bala(130, 2040, 7.5, 4800);     // Only Balancing: bala(130, 2035,7,4800);
+rPID  dyn_bala(130, 2040, 0, 4800);     // Only Balancing: bala(130, 2035,7,4800);
+rPID  movePID(0.02, 0.005, 0);        // forward movePID Default: 0.025,0.001, 4
+rPID  yawPID(5, 0, 0, 4800);
+
+uint8_t mode = 0;
+float pre_yaw = 0, cur_deg = 0, yaw_diff = 0;
 
 Encoders encoderA(ENA_A,ENA_B), encoderB(ENB_A,ENB_B);      // Create an Encoder instance (2,3) (1,0)
 uint32_t prevTime=0,intVal=2000, pT=0;
 int32_t ref=0, desiredPosA=0,desiredPosB=0,cnt=0;
 int32_t desiredVelA=0,desiredVelB=0;
 String inStr = "";
+
+float velA=0, velB=0,yaw=0, dt=DT;
+int Desired_vel_A=0,Desired_vel_B=0;
+bool second_num=false;
+
 void setup() {
  Serial.begin(115200);
  //while(!Serial) {}
@@ -46,9 +59,7 @@ void setup() {
   eeprom.loadCalibration();  // calibration data
  prevTime=micros(); pT=micros();
 }
-float velA=0, velB=0,yaw=0, dt=DT;
-int Desired_vel_A=0,Desired_vel_B=0;
-bool second_num=false;
+
 void loop() {
  if (mpu.isDataReady()){
     getDt(); 
@@ -62,45 +73,90 @@ void loop() {
     float pitchDeg=mpu.getPitch()*RAD_TO_DEG;
     int32_t curPosA=encoderA.getEncoderCount();
     int32_t curPosB=encoderB.getEncoderCount();
-    float curPos=(curPosA+curPosB)/2;
-    //float pitchRef=movePID.wheelControl(0,curPosA,dt);
 
-    float pitchRef = 0;
+    float desired_deg = 0;
+    float yawDeg = mpu.getYaw()*RAD_TO_DEG;
     
-    float mCommand= bala.balanceControl(-pitchRef,pitchDeg, gyro.x, dt);
-    mCommand=constrain(mCommand,-5000,5000);
-    desiredVelA=mCommand;desiredVelB=mCommand;
+    // Degree update
+    if( yawDeg >= 0 && pre_yaw < - 150)
+    {
+      yaw_diff = -yawDeg + pre_yaw + 360;
+    }    
+    else if(yawDeg <= 0 && pre_yaw > 150 )
+    {
+      yaw_diff = -yawDeg + pre_yaw - 360;
+    }    
+    else
+      yaw_diff = yawDeg - pre_yaw;
+    cur_deg += yaw_diff;
+    pre_yaw = yawDeg;
+    
+    float yaw_Command = yawPID.yawControl(desired_deg, cur_deg, dt);
+    yaw_Command=constrain(yaw_Command, -50, 50);
 
-    float yawDeg=mpu.getYaw()*RAD_TO_DEG;
-    float yaw_data = yawPID.yawControl(179, yawDeg, gyro.z, dt);
+    int32_t desired_x = 0;
+    float curPos=(curPosA+curPosB)/2;
+    
+    float pitchRef=movePID.wheelControl(desired_x, curPos, dt);
+    pitchRef=constrain(pitchRef, -0.5, 0.5);
+    
+    float mCommand= static_bala.balanceControl(-pitchRef, pitchDeg, gyro.x, dt);
+    if(pitchRef > 1 || pitchRef < -1)
+      mCommand= dyn_bala.balanceControl(-pitchRef, pitchDeg, gyro.x, dt);
+    mCommand = constrain(mCommand, -5000, 5000);
+    desiredVelA = mCommand;
+    desiredVelB = mCommand;
     
     int32_t uA= pidA.speedControl(desiredVelA,curPosA, dt, velA);
-    int32_t uB= pidB.speedControl(desiredVelB,curPosB, dt,velB);
-    
+    int32_t uB= pidB.speedControl(desiredVelB,curPosB, dt, velB);
+        
+
     if ((pitchDeg < ANGLE_LIMIT)&&(pitchDeg > -ANGLE_LIMIT))
     {  // fail
-      motorA.run(-uA); motorB.run(-uA); 
-      
-      reset_count++; 
-      
-      if(reset_count < 100)
+
+       if( pitchDeg < 1 && pitchDeg > -1)
+       {     
+         motorA.run(-yaw_Command); 
+         motorB.run(yaw_Command);   
+       }
+       else
+       {  
+         motorA.run(uA); 
+         motorB.run(uB);        
+       }   
+       reset_count++; 
+          
+       if(reset_count < 100)
+       {
+         //static_bala.setIntegrator(0);
+         reset_count = 0;
+        }
+     }
+     else{ motorA.run(0);motorB.run(0); static_bala.setIntegrator(0); movePID.setIntegrator(0); reset_count = 0; }
+   
+    uint32_t curTime=micros();
+
+    if (curTime-prevTime>500000){
+      mode++;
+
+      if(mode >= 100)
       {
-        //bala.setIntegrator(0);
-        reset_count = 0;
+        mode = 0;
+        Serial << "desired_deg: " << desired_deg <<  ", yawDeg: " << yawDeg << ", cur_deg: " << cur_deg << ", yaw_Command: " << yaw_Command <<endl;
+        Serial << "curPosA: " << curPosA <<  " curPosB: " << curPosB <<endl;
+        Serial << "desired_x: " << desired_x <<  " curPos: " << curPos <<endl;
+        Serial <<" pitchRef: "<< pitchRef << " pitchDeg: " << pitchDeg <<endl;
       }
     }
-    else{ motorA.run(0);motorB.run(0); bala.setIntegrator(0); reset_count = 0; }
-    uint32_t curTime=micros();
 
     /*
     if (curTime-prevTime>20000){
          prevTime=curTime;
-        Serial <<bala.getP()<<","<<bala.getI() <<","<<bala.getD()<<endl;
+        Serial <<static_bala.getP()<<","<<static_bala.getI() <<","<<static_bala.getD()<<endl;
         Serial <<mpu.getPitch()*RAD_TO_DEG<<","<<gyro.x <<","<<mCommand/10.<<endl;
        Serial << "YPR "<<mpu.getYaw()*RAD_TO_DEG<<" "<<mpu.getPitch()*RAD_TO_DEG<<" "<<mpu.getRoll()*RAD_TO_DEG<<endl;
       Serial.print(desiredVelA); Serial.print(",");Serial.print(velA);Serial.print(",");Serial.println(5*uA);   
    }
-    */
    Serial.print(mpu.getYaw()*RAD_TO_DEG);
    Serial.print(',');
    Serial.print(mpu.getPitch()*RAD_TO_DEG);
@@ -114,6 +170,7 @@ void loop() {
    Serial.print(yawPID.yaw_err);
    Serial.print(',');
    Serial.println(yaw_data);
+    */
    
  }
  // serialEvents();
@@ -132,12 +189,12 @@ void serialEvents(){
   while (Serial.available()){
     char c= (char)Serial.read();
     if (c=='\n'){
-       bala.setD(inStr.toFloat());
+       static_bala.setD(inStr.toFloat());
        inStr="";
     }
     else if (c==','){
-      if (second_num){ bala.setI(inStr.toFloat());second_num=false;}
-      else { bala.setP(inStr.toFloat());second_num=true;}
+      if (second_num){ static_bala.setI(inStr.toFloat());second_num=false;}
+      else { static_bala.setP(inStr.toFloat());second_num=true;}
       inStr="";
     }
     else

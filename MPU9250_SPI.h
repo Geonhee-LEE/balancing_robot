@@ -7,10 +7,10 @@
 #include <SPI.h>
 //#define PRINT_DETAILS
 #define DT 0.01f
-#define fc 0.5f
-#define Tc (1./(2.*PI*fc))
-#define ALPHA (Tc/(Tc+DT))
-#define BETA (1-ALPHA)
+#define fc_ 0.5f
+#define Tc_ (1./(2.*PI*fc_))
+#define ALPHA_ (Tc_/(Tc_+DT))
+#define BETA_ (1-ALPHA_)
 enum GyroRange { GYRO_RANGE_250DPS,  GYRO_RANGE_500DPS,  GYRO_RANGE_1000DPS,  GYRO_RANGE_2000DPS };
 enum AccelRange  { ACCEL_RANGE_2G,  ACCEL_RANGE_4G,  ACCEL_RANGE_8G,  ACCEL_RANGE_16G  };
 enum DlpfBandwidth  { DLPF_BANDWIDTH_250HZ, DLPF_BANDWIDTH_184HZ,  DLPF_BANDWIDTH_92HZ,  DLPF_BANDWIDTH_41HZ,

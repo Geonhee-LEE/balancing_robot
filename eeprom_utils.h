@@ -21,7 +21,7 @@ class EEPROM_BACKUP{
   void printCalibration();
   void setupEEPROM();
 }; 
-void EEPROM_BACKUP::saveCalibration(bool b_save = true) {
+void EEPROM_BACKUP::saveCalibration(bool b_save) {
     EEPROM.updateByte(EEP_CALIB_FLAG, 1);
     EEPROM.updateFloat(EEP_ACC_BIAS + 0, mpu.getAccBias().x);
     EEPROM.updateFloat(EEP_ACC_BIAS + 4, mpu.getAccBias().y);

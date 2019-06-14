@@ -23,7 +23,7 @@ public:
   float wheelControl(float xRef, float x, float dt);
   float speedControl(float vel_d, float pos, float dt, float& vel);
   float balanceControl(float pitchRef, float pitch, float pitchVel, float dt);
-  float yawControl(float yawRef, float yaw, float yawVel, float dt);
+  float yawControl(float yawRef, float yaw, float dt);
 
   float yaw_err = 0;
 private:

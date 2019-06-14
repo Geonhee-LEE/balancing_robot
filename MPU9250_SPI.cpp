@@ -64,15 +64,15 @@ void MPU9250_SPI::compFilter(float dt){
   float ayz= sqrt(_a.y*_a.y+_a.z*_a.z);
   float rollAcc= atan2(-_a.y,-_a.z);
   float pitchAcc= atan2(_a.x,ayz);
-  roll= ALPHA*(roll+_g.x*dt)+BETA*rollAcc;
-  pitch= ALPHA*(pitch+_g.y*dt)+BETA*pitchAcc;
+  roll= ALPHA_*(roll+_g.x*dt)+BETA_*rollAcc;
+  pitch= ALPHA_*(pitch+_g.y*dt)+BETA_*pitchAcc;
   float c_th=cos(pitch), s_th=sin(pitch), c_pi=cos(roll), s_pi=sin(roll); 
   _m.x= m.x*c_th+m.y*s_pi*c_th+m.z*c_pi*s_th;
   _m.y= m.y*c_pi-m.z*s_pi;
   float heading=-atan2(_m.y, _m.x);
   if ((yaw-heading)>PI) heading+=2*PI;
   else if ((yaw-heading)<-PI) yaw+=2*PI; 
-  yaw= ALPHA*(yaw+_g.z*dt)+BETA*heading;
+  yaw= ALPHA_*(yaw+_g.z*dt)+BETA_*heading;
   yaw= (yaw> PI) ? (yaw - 2*PI) : ((yaw < -PI) ? (yaw +2*PI) : yaw);
 }
 void MPU9250_SPI::update(Vect3& _a,Vect3& _g,Vect3& _m)    {

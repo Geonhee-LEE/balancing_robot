@@ -1,7 +1,7 @@
 #include "motorPID.h"
 
 float rPID::wheelControl(float xRef, float x, float dt){
-  float error = xRef- x;
+  float error = xRef - x;
   _integrator+=_ki*error*dt;
   _integrator = constrain(_integrator,-_imax,_imax);
   return 0.01*(_kp*error+_integrator); 
@@ -18,32 +18,21 @@ float rPID::speedControl(float vel_d, float pos, float dt, float& vel){
 }
 
 float rPID::balanceControl(float pitchRef,float pitch, float pitchVel, float dt){
-  float err= pitchRef+pitch;
+  float err= pitchRef + pitch;
   _integrator+=_ki*err*dt;
   _integrator = constrain(_integrator,-_imax,_imax);
   return _kp*err +_kd*pitchVel+_integrator; 
 }
 
-float rPID::yawControl(float yawRef, float yaw, float yawVel, float dt){
-  float err= yawRef-yaw;
+float rPID::yawControl(float yawRef, float yaw, float dt){
+  float err= yawRef - yaw;
   float yawRef_r;
-
-  if(err > 180) 
-  {
-     yawRef_r = -180+(yawRef-180);
-     err = yawRef_r - yaw;
-  }
-  else if(err < -180)
-  {
-     yawRef_r = 180+(yawRef+180);
-     err = yawRef_r - yaw;
-  }
 
   yaw_err = err;
   
-  _integrator+=_ki*err*dt;
+  _integrator+=_ki*err*dt;                                                                    
   _integrator = constrain(_integrator,-_imax,_imax);
-  return _kp*err +_kd*yawVel+_integrator; 
+  return _kp*err +_integrator; 
 }
 
 /*
